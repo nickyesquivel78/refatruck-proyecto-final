@@ -16,7 +16,16 @@ return new class extends Migration
             $table->string('name');
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
+            
+            // Laravel ya utiliza BCRYPT automáticamente para el campo password
+            $table->string('password'); 
+            
+            // Agregamos el control de roles (RBAC) por defecto como cliente
+            $table->enum('rol', ['admin', 'vendedor', 'cliente'])->default('cliente');
+            
+            // Agregamos el teléfono según tu diagrama de base de datos
+            $table->string('telefono')->nullable(); 
+
             $table->rememberToken();
             $table->timestamps();
         });
