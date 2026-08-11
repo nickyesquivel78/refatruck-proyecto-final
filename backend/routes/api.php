@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Api\RefaccionController; // Asegúrate de tener tu controlador importado
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\Api\CotizacionController;
+
 
 // --- RUTAS PÚBLICAS (No requieren Token) ---
 Route::post('/login', [AuthController::class, 'login']);
@@ -19,6 +21,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/refacciones/{id}', [RefaccionController::class, 'update']);
     Route::delete('/refacciones/{id}', [RefaccionController::class, 'destroy']);
     
+    // Rutas de Cotizaciones
+    Route::post('/cotizaciones', [CotizacionController::class, 'store']);
+    Route::get('/cotizaciones', [CotizacionController::class, 'index']);
+    Route::put('/cotizaciones/{id}/estado', [CotizacionController::class, 'updateEstado']);
+    Route::get('/cotizaciones/{id}', [CotizacionController::class, 'show']);
+
+
     // Ruta para cerrar sesión
     Route::post('/logout', function (Request $request) {
         $request->user()->currentAccessToken()->delete();

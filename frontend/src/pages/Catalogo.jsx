@@ -1,105 +1,173 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import clienteAxios from '../config/axios';
 
 export default function Catalogo() {
   const [refacciones, setRefacciones] = useState([]);
-  const [busqueda, setBusqueda] = useState('');
-  const [filtroPrecio, setFiltroPrecio] = useState('todos');
-  const [piezaSeleccionada, setPiezaSeleccionada] = useState(null);
+  const [carrito, setCarrito] = useState([]);
+  
+  // Misión 1: Verificamos si hay alguien logeado
+  const estaLogeado = !!localStorage.getItem('token');
 
   useEffect(() => {
     const obtenerRefacciones = async () => {
       try {
         const respuesta = await clienteAxios.get('/refacciones');
-        setRefacciones(respuesta.data.data);
+        const listaDePiezas = respuesta.data.data ? respuesta.data.data : respuesta.data;
+        
+        if (Array.isArray(listaDePiezas)) {
+            setRefacciones(listaDePiezas);
+        } else {
+            setRefacciones([]); 
+        }
       } catch (error) {
-        console.error("Hubo un error al cargar el catálogo", error);
+        console.error("Error al cargar el catálogo", error);
+        setRefacciones([]); 
       }
     };
     obtenerRefacciones();
   }, []);
 
-  // Lógica de filtrado múltiple (Buscador + Precio)
-  const refaccionesFiltradas = refacciones.filter((pieza) => {
-    // 1. Filtro por texto
-    const coincideTexto = pieza.nombre.toLowerCase().includes(busqueda.toLowerCase()) || 
-                          pieza.numero_parte.toLowerCase().includes(busqueda.toLowerCase());
-    
-    // 2. Filtro por precio
-    let coincidePrecio = true;
-    if (filtroPrecio === 'bajos') coincidePrecio = pieza.precio < 1000;
-    if (filtroPrecio === 'medios') coincidePrecio = pieza.precio >= 1000 && pieza.precio <= 5000;
-    if (filtroPrecio === 'altos') coincidePrecio = pieza.precio > 5000;
+  const agregarAlCarrito = (pieza) => {
+    setCarrito((carritoActual) => {
+      const existe = carritoActual.find(item => item.id === pieza.id);
+      if (existe) {
+        return carritoActual.map(item => 
+          item.id === pieza.id ? { ...item, cantidad: item.cantidad + 1 } : item
+        );
+      }
+      return [...carritoActual, { ...pieza, cantidad: 1 }];
+    });
+  };
 
-    return coincideTexto && coincidePrecio;
-  });
+  const modificarCantidad = (id, accion) => {
+    setCarrito((carritoActual) => {
+      return carritoActual.map(item => {
+        if (item.id === id) {
+          // Ya no limitamos por el stock, dejamos que coticen lo que necesiten
+          if (accion === 'sumar') {
+            return { ...item, cantidad: item.cantidad + 1 };
+          }
+          if (accion === 'restar' && item.cantidad > 1) {
+            return { ...item, cantidad: item.cantidad - 1 };
+          }
+        }
+        return item;
+      });
+    });
+  };
+
+  const eliminarDelCarrito = (id) => {
+    setCarrito((carritoActual) => carritoActual.filter(item => item.id !== id));
+  };
+
+  const totalCarrito = carrito.reduce((total, item) => total + (item.precio * item.cantidad), 0);
+
+  // Misión 3 (Frontend): Función para enviar el carrito a Laravel
+  const enviarCotizacion = async () => {
+    try {
+      // Preparamos el paquete exacto que Laravel necesita
+      const paquete = {
+        total: totalCarrito,
+        detalles: carrito.map(item => ({
+          refaccion_id: item.id,
+          cantidad: item.cantidad,
+          precio_unitario: item.precio
+        }))
+      };
+
+      // Hacemos la petición POST a la API (Ruta que crearemos en Laravel)
+      const respuesta = await clienteAxios.post('/cotizaciones', paquete);
+      
+      alert("¡Cotización enviada con éxito! Pendiente de aprobación.");
+      setCarrito([]); // Vaciamos el carrito tras el éxito
+    } catch (error) {
+      alert("Hubo un error al enviar la cotización.");
+      console.error(error);
+    }
+  };
 
   return (
-    <div style={{ padding: '40px 20px', maxWidth: '1200px', margin: '0 auto', position: 'relative' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '10px', fontSize: '2rem' }}>Catálogo de Refacciones</h2>
-      <p style={{ textAlign: 'center', color: '#64748b', marginBottom: '30px' }}>Encuentra la pieza exacta para tu camión.</p>
-
-      {/* Barra de Búsqueda y Filtros */}
-      <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '40px' }}>
-        <input 
-          type="text" 
-          placeholder="Buscar por nombre o P/N..." 
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          style={{ flex: '1', minWidth: '250px', maxWidth: '400px', padding: '12px 20px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none' }}
-        />
-        
-        <select 
-          value={filtroPrecio} 
-          onChange={(e) => setFiltroPrecio(e.target.value)}
-          style={{ padding: '12px 20px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', backgroundColor: 'white', cursor: 'pointer' }}
-        >
-          <option value="todos">Cualquier Precio</option>
-          <option value="bajos">Menos de $1,000</option>
-          <option value="medios">De $1,000 a $5,000</option>
-          <option value="altos">Más de $5,000</option>
-        </select>
-      </div>
-
-      {/* Cuadrícula de Tarjetas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '25px' }}>
-        {refaccionesFiltradas.length === 0 ? (
-          <p style={{ textAlign: 'center', gridColumn: '1 / -1', color: '#94a3b8', fontSize: '1.2rem' }}>No se encontraron refacciones.</p>
-        ) : (
-          refaccionesFiltradas.map((pieza) => (
-            <div key={pieza.id} style={{ backgroundColor: 'white', padding: '25px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ width: '80px', height: '80px', backgroundColor: '#f1f5f9', borderRadius: '50%', marginBottom: '15px', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '2rem' }}>⚙️</div>
-              <h3 style={{ margin: '0 0 10px 0', textAlign: 'center' }}>{pieza.nombre}</h3>
-              <p style={{ margin: '0 0 5px 0', color: '#64748b' }}>P/N: {pieza.numero_parte}</p>
-              <p style={{ margin: '0 0 15px 0', color: '#2563eb', fontSize: '1.4rem', fontWeight: 'bold' }}>${pieza.precio}</p>
-              <button onClick={() => setPiezaSeleccionada(pieza)} style={{ width: '100%', padding: '10px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', marginTop: 'auto' }}>Ver Detalles</button>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* MODAL */}
-      {piezaSeleccionada && (
-        <div style={{ position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: '2000' }}>
-          <div style={{ backgroundColor: 'white', width: '90%', maxWidth: '500px', borderRadius: '12px', padding: '30px', position: 'relative' }}>
-            <button onClick={() => setPiezaSeleccionada(null)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>✖</button>
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '20px' }}>
-              <div style={{ fontSize: '4rem' }}>📦</div>
+    <div style={{ display: 'flex', gap: '20px', padding: '20px', maxWidth: '1200px', margin: '0 auto', flexWrap: 'wrap' }}>
+      
+      {/* SECCIÓN IZQUIERDA: EL CATÁLOGO (Misión 2: Restaurado) */}
+      <div style={{ flex: '1 1 60%', minWidth: '300px' }}>
+        <h2 style={{ fontSize: '2rem', marginBottom: '20px', color: '#1e293b' }}>Catálogo de Refacciones</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+          {refacciones.map((pieza) => (
+            <div key={pieza.id} style={{ border: '1px solid #e2e8f0', padding: '15px', borderRadius: '8px', backgroundColor: 'white', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
-                <h2 style={{ margin: '0 0 5px 0' }}>{piezaSeleccionada.nombre}</h2>
-                <span style={{ backgroundColor: '#e2e8f0', padding: '4px 8px', borderRadius: '4px', fontSize: '0.85rem' }}>P/N: {piezaSeleccionada.numero_parte}</span>
+                <h3 style={{ margin: '0 0 5px 0', color: '#0f172a' }}>{pieza.nombre}</h3>
+                <span style={{ backgroundColor: '#e2e8f0', color: '#475569', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold' }}>P/N: {pieza.numero_parte || 'N/A'}</span>
+                {/* Aquí está la descripción que querías mantener */}
+                <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '10px' }}>{pieza.descripcion}</p>
+              </div>
+              
+              <div style={{ marginTop: '15px' }}>
+                <p style={{ fontWeight: 'bold', color: '#16a34a', fontSize: '1.2rem', margin: '0 0 15px 0' }}>${pieza.precio}</p>
+                
+                {/* Misión 1: Candado para visitantes */}
+                {estaLogeado ? (
+                  <button 
+                    onClick={() => agregarAlCarrito(pieza)}
+                    style={{ width: '100%', padding: '10px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    Agregar a Cotización
+                  </button>
+                ) : (
+                  <Link to="/" style={{ display: 'block', textAlign: 'center', width: '100%', padding: '10px', backgroundColor: '#f1f5f9', color: '#2563eb', border: '1px solid #cbd5e1', borderRadius: '5px', textDecoration: 'none', fontWeight: 'bold' }}>
+                    Cotizar
+                  </Link>
+                )}
               </div>
             </div>
-            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px', marginBottom: '25px' }}>
-              <p><strong>Precio unitario:</strong> <span style={{ color: '#10b981', fontSize: '1.2rem', fontWeight: 'bold' }}>${piezaSeleccionada.precio}</span></p>
-             {/* <p><strong>Stock:</strong> {piezaSeleccionada.stock} piezas</p>*/}
+          ))}
+        </div>
+      </div>
+
+      {/* SECCIÓN DERECHA: EL CARRITO (Misión 1: Oculto si no hay sesión) */}
+      {estaLogeado && (
+        <div style={{ flex: '1 1 30%', minWidth: '300px', backgroundColor: '#f8fafc', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0', height: 'fit-content', position: 'sticky', top: '20px' }}>
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: '#1e293b' }}>Tu Cotización</h2>
+          
+          {carrito.length === 0 ? (
+            <p style={{ color: '#6b7280', textAlign: 'center' }}>Tu carrito está vacío</p>
+          ) : (
+            <div>
+              {carrito.map((item) => (
+                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e1', paddingBottom: '10px', marginBottom: '10px' }}>
+                  <div>
+                    <h4 style={{ margin: '0', color: '#0f172a', fontSize: '0.95rem' }}>{item.nombre}</h4>
+                    <p style={{ margin: '0', color: '#16a34a', fontWeight: 'bold', fontSize: '0.85rem' }}>${item.precio} c/u</p>
+                  </div>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button onClick={() => modificarCantidad(item.id, 'restar')} style={{ padding: '2px 8px', cursor: 'pointer', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '4px' }}>-</button>
+                    <span style={{ fontWeight: 'bold' }}>{item.cantidad}</span>
+                    <button onClick={() => modificarCantidad(item.id, 'sumar')} style={{ padding: '2px 8px', cursor: 'pointer', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '4px' }}>+</button>
+                    <button onClick={() => eliminarDelCarrito(item.id)} style={{ color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer', marginLeft: '5px', fontSize: '1.1rem' }}>✖</button>
+                  </div>
+                </div>
+              ))}
+              
+              <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #cbd5e1' }}>
+                <h3 style={{ display: 'flex', justifyContent: 'space-between', color: '#0f172a' }}>
+                  Total: <span style={{ color: '#16a34a' }}>${totalCarrito.toFixed(2)}</span>
+                </h3>
+                
+                {/* El botón que ejecuta la función Misión 3 */}
+                <button 
+                  onClick={enviarCotizacion}
+                  style={{ width: '100%', padding: '12px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '5px', fontSize: '1.1rem', cursor: 'pointer', marginTop: '10px', fontWeight: 'bold', boxShadow: '0 4px 6px rgba(16, 185, 129, 0.3)' }}
+                >
+                  Enviar a Cotización
+                </button>
+              </div>
             </div>
-            <button style={{ width: '100%', padding: '12px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
-              Solicitar Cotización
-            </button>
-          </div>
+          )}
         </div>
       )}
+
     </div>
   );
 }

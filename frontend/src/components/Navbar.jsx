@@ -18,12 +18,14 @@ export default function Navbar() {
     setMenuAbierto(false);
   };
 
-  const cerrarSesion = () => {
+  const cerrarSesion = (e) => {
+    e.preventDefault(); // <-- Esta línea detiene el error del enlace '#'
+    
     // Borramos el token y el rol de la memoria
     localStorage.removeItem('token');
     localStorage.removeItem('rol');
     cerrarMenu();
-    navigate('/'); // Mandamos al usuario de regreso al Login
+    navigate('/'); // Ahora sí te expulsará limpiamente
   };
 
   // Determinamos a dónde lleva el logo dependiendo del rol (o si es invitado)
@@ -75,7 +77,7 @@ export default function Navbar() {
 
           {/* Botón de salir SOLO visible si hay una sesión activa */}
           {token && (
-            <Link to="#" onClick={cerrarSesion}>Salir</Link>
+            <Link to="#" onClick={(e) => cerrarSesion(e)}>Salir</Link>
           )}
 
         </div>

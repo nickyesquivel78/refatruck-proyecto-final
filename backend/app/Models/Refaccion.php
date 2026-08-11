@@ -9,9 +9,8 @@ class Refaccion extends Model
 {
     use HasFactory;
 
-    // Especificamos el nombre exacto de la tabla en MySQL
     protected $table = 'refacciones';
 
-    // Le damos permiso a estos 4 campos para que puedan guardar datos
+    // Agregamos 'descripcion' a la lista de permisos
     protected $fillable = ['nombre', 'numero_parte', 'precio', 'stock'];
 }
