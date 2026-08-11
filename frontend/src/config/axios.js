@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const clienteAxios = axios.create({
     // Asegúrate de que esta sea la URL correcta de tu backend en Laravel
-    baseURL: 'http://localhost:8000/api' 
+    baseURL: 'https://refatruckmov.rf.gd/api' 
 });
 
 // "Interceptor": Antes de que cualquier petición salga hacia Laravel, 
